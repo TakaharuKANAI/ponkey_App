@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ponkey controller v2.4</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: #d3d3d3;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 32px;
+            color: #333;
+            font-weight: 300;
+            letter-spacing: 4px;
+        }
+
+        .connection-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            background: #e8e8e8;
+            color: #666;
+        }
+
+        .connection-status.connected {
+            background: #4a4a4a;
+            color: white;
+        }
+
+        .transport {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .transport button {
+            padding: 10px 20px;
+            border: 2px solid #999;
+            border-radius: 8px;
+            background: #e8e8e8;
+            color: #333;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .transport button:active {
+            transform: scale(0.95);
+        }
+
+        .transport button.active {
+            background: #666;
+            color: white;
+            border-color: #444;
+        }
+
+        #resetBtn {
+            background: #ff6666;
+            border-color: #cc4444;
+            color: white;
+        }
+
+        #resetBtn:hover {
+            background: #ff4444;
+        }
+
+        .bpm-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #e8e8e8;
+            padding: 5px 15px;
+            border-radius: 8px;
+        }
+
+        .bpm-control input {
+            width: 120px;
+        }
+
+        .bpm-display {
+            font-weight: bold;
+            color: #333;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .round-keys-container {
+            background: #bbb;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .round-keys {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .round-key {
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: #e8e8e8;
+            border: 3px solid #999;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s, background 0.2s, border-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #666;
+            font-weight: bold;
+        }
+
+        .round-key:active {
+            transform: scale(0.95);
+        }
+
+        .round-key.active {
+            background: #4a4a4a;
+            border-color: #333;
+            color: white;
+        }
+
+        .round-key.indicator::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff6600;
+            box-shadow: 0 0 10px #ff6600;
+        }
+
+        .square-keys {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .square-key {
+            padding: 15px 10px;
+            background: #e8e8e8;
+            border: 2px solid #999;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+            transition: transform 0.2s, background 0.2s;
+            position: relative;
+        }
+
+        .square-key:active {
+            transform: scale(0.95);
+        }
+
+        .square-key.selected {
+            background: #666;
+            color: white;
+            border-color: #444;
+        }
+
+        .square-key.recording {
+            background: #ff4444;
+            color: white;
+            border-color: #cc0000;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @media (min-width: 768px) {
+            .square-keys {
+                grid-template-columns: repeat(8, 1fr);
+            }
+        }
+
+        .debug-log {
+            margin-top: 20px;
+            padding: 10px;
+            background: #333;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            height: 150px;
+            overflow-y: auto;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .debug-log.visible {
+            display: block;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 8px;
+            background: #4a4a4a;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">ponkey</h1>
+            <div class="connection-status" id="connectionStatus">未接続</div>
+        </div>
+
+        <div class="transport">
+            <button id="playBtn">▶ Play</button>
+            <button id="stopBtn">◼ Stop</button>
+            <button id="resetBtn">Reset</button>
+            <button id="tapBtn">Tap Tempo</button>
+            <div class="bpm-control">
+                <label>BPM:</label>
+                <input type="range" id="bpmSlider" min="60" max="200" value="100">
+                <div class="bpm-display" id="bpmDisplay">100</div>
+            </div>
+            <button id="debugBtn">Debug</button>
+        </div>
+
+        <div class="round-keys-container">
+            <div class="round-keys" id="roundKeys"></div>
+        </div>
+
+        <div class="square-keys" id="squareKeys"></div>
+
+        <div class="debug-log" id="debugLog"></div>
+    </div>
+
+    <div class="modal" id="connectionModal">
+        <div class="modal-content">
+            <h2>ponkey接続</h2>
+            <p style="margin: 20px 0; color: #666;">BLE-MIDI機器を検索します</p>
+            <button id="connectBtn">接続</button>
+            <button id="closeModalBtn" style="background: #999;">キャンセル</button>
+        </div>
+    </div>
+
+    <script>
+        // 定数定義
+        const CONSTANTS = {
+            MIDI_NOTE_DURATION: 50,
+            NOTE_TRIGGER_THRESHOLD: 0.5,
+            TAP_TIMEOUT: 2000,
+            LONG_PRESS_DURATION: 500,
+            SCHEDULE_AHEAD_TIME: 0.1,
+            MODE_NAMES: ['KICK', 'SNARE', 'HAT', 'PERC', 'PAD', 'LEAD', 'PLUCK', 'BELL'],
+            MIDI_SERVICE_UUID: '03b80e5a-ede8-4b33-a751-6ce34ec4c700',
+            MIDI_CHAR_UUID: '7772e5db-3868-4112-a1a9-f2669d106bf3'
+        };
+
+        // Web Audio API
+        let audioContext = null;
+        const activeNodes = new Set();
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+
+        function cleanupNode(node) {
+            try {
+                node.disconnect();
+                activeNodes.delete(node);
+            } catch (e) {}
+        }
+
+        // ドラムサウンド生成(メモリリーク修正版)
+        function playDrumSound(type) {
+            if (!audioContext) initAudio();
+            
+            const now = audioContext.currentTime;
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            
+            activeNodes.add(osc);
+            activeNodes.add(gain);
+            
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            
+            osc.onended = () => {
+                cleanupNode(gain);
+                cleanupNode(osc);
+            };
+            
+            switch(type) {
+                case 0: // KICK
+                    osc.frequency.setValueAtTime(60, now);
+                    osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    gain.gain.setValueAtTime(2.0, now);  // 音量を2倍に増加
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                    break;
+                    
+                case 1: // SNARE
+                    const bufferSize = audioContext.sampleRate * 0.1;
+                    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                    const output = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
+                    }
+                    const noise = audioContext.createBufferSource();
+                    noise.buffer = buffer;
+                    const noiseGain = audioContext.createGain();
+                    
+                    activeNodes.add(noise);
+                    activeNodes.add(noiseGain);
+                    
+                    noise.connect(noiseGain);
+                    noiseGain.connect(audioContext.destination);
+                    noiseGain.gain.setValueAtTime(0.5, now);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    
+                    noise.onended = () => {
+                        cleanupNode(noiseGain);
+                        cleanupNode(noise);
+                    };
+                    
+                    noise.start(now);
+                    noise.stop(now + 0.1);
+                    
+                    cleanupNode(gain);
+                    cleanupNode(osc);
+                    return;
+                    
+                case 2: // HAT
+                    osc.frequency.setValueAtTime(8000, now);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                    break;
+                    
+                case 3: // PERC
+                    osc.frequency.setValueAtTime(1000, now);
+                    osc.frequency.exponentialRampToValueAtTime(400, now + 0.03);
+                    gain.gain.setValueAtTime(0.5, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                    break;
+            }
+        }
+
+        // シンセサウンド生成(メモリリーク修正版)
+        function playSynthSound(noteIndex, synthType) {
+            if (!audioContext) initAudio();
+            
+            const now = audioContext.currentTime;
+            const frequencies = [
+                261.63, 293.66, 329.63, 392.00,
+                440.00, 523.25, 587.33, 659.25,
+                783.99, 880.00, 1046.50, 1174.66,
+                1318.51, 1567.98, 1760.00, 2093.00
+            ];
+            
+            const freq = frequencies[noteIndex] || 440;
+            
+            switch(synthType) {
+                case 0: // PAD
+                    const osc1 = audioContext.createOscillator();
+                    const gain1 = audioContext.createGain();
+                    activeNodes.add(osc1);
+                    activeNodes.add(gain1);
+                    
+                    osc1.frequency.setValueAtTime(freq, now);
+                    osc1.type = 'sine';
+                    osc1.connect(gain1);
+                    gain1.connect(audioContext.destination);
+                    gain1.gain.setValueAtTime(0.3, now);
+                    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    
+                    osc1.onended = () => {
+                        cleanupNode(gain1);
+                        cleanupNode(osc1);
+                    };
+                    
+                    osc1.start(now);
+                    osc1.stop(now + 0.5);
+                    break;
+                    
+                case 1: // LEAD
+                    const osc2 = audioContext.createOscillator();
+                    const gain2 = audioContext.createGain();
+                    const filter2 = audioContext.createBiquadFilter();
+                    activeNodes.add(osc2);
+                    activeNodes.add(gain2);
+                    activeNodes.add(filter2);
+                    
+                    osc2.frequency.setValueAtTime(freq, now);
+                    osc2.type = 'sawtooth';
+                    osc2.connect(filter2);
+                    filter2.connect(gain2);
+                    filter2.type = 'lowpass';
+                    filter2.frequency.setValueAtTime(2000, now);
+                    filter2.frequency.exponentialRampToValueAtTime(500, now + 0.3);
+                    gain2.connect(audioContext.destination);
+                    gain2.gain.setValueAtTime(0.2, now);
+                    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    
+                    osc2.onended = () => {
+                        cleanupNode(filter2);
+                        cleanupNode(gain2);
+                        cleanupNode(osc2);
+                    };
+                    
+                    osc2.start(now);
+                    osc2.stop(now + 0.3);
+                    break;
+                    
+                case 2: // PLUCK
+                    const osc3 = audioContext.createOscillator();
+                    const gain3 = audioContext.createGain();
+                    activeNodes.add(osc3);
+                    activeNodes.add(gain3);
+                    
+                    osc3.frequency.setValueAtTime(freq, now);
+                    osc3.type = 'square';
+                    osc3.connect(gain3);
+                    gain3.connect(audioContext.destination);
+                    gain3.gain.setValueAtTime(0.25, now);
+                    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    
+                    osc3.onended = () => {
+                        cleanupNode(gain3);
+                        cleanupNode(osc3);
+                    };
+                    
+                    osc3.start(now);
+                    osc3.stop(now + 0.2);
+                    break;
+                    
+                case 3: // BELL
+                    const osc4a = audioContext.createOscillator();
+                    const osc4b = audioContext.createOscillator();
+                    const gain4 = audioContext.createGain();
+                    activeNodes.add(osc4a);
+                    activeNodes.add(osc4b);
+                    activeNodes.add(gain4);
+                    
+                    osc4a.frequency.setValueAtTime(freq, now);
+                    osc4b.frequency.setValueAtTime(freq * 2.1, now);
+                    osc4a.type = 'triangle';
+                    osc4b.type = 'triangle';
+                    osc4a.connect(gain4);
+                    osc4b.connect(gain4);
+                    gain4.connect(audioContext.destination);
+                    gain4.gain.setValueAtTime(0.2, now);
+                    gain4.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                    
+                    osc4a.onended = () => {
+                        cleanupNode(gain4);
+                        cleanupNode(osc4a);
+                        cleanupNode(osc4b);
+                    };
+                    
+                    osc4a.start(now);
+                    osc4b.start(now);
+                    osc4a.stop(now + 0.8);
+                    osc4b.stop(now + 0.8);
+                    break;
+            }
+        }
+
+        // アプリケーション状態
+        const app = {
+            device: null,
+            characteristic: null,
+            connected: false,
+            currentMode: 0,
+            isPlaying: false,
+            bpm: 100,
+            currentStep: 0,
+            nextStepTime: 0,
+            animationFrameId: null,
+            tapTimes: [],
+            recordingLayer: -1,
+            recordingStartTime: 0,
+            loopDuration: 0,
+            rhythmPatterns: {
+                0: Array(16).fill(false),
+                1: Array(16).fill(false),
+                2: Array(16).fill(false),
+                3: Array(16).fill(false)
+            },
+            synthPatterns: {
+                4: [],
+                5: [],
+                6: [],
+                7: []
+            }
+        };
+
+        function log(msg) {
+            const debugLog = document.getElementById('debugLog');
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${time}] ${msg}`;
+            debugLog.appendChild(logEntry);
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(msg);
+        }
+
+        async function connectBLE() {
+            try {
+                log('BLE機器を検索中...');
+                
+                app.device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [CONSTANTS.MIDI_SERVICE_UUID] }]
+                });
+                
+                log(`デバイス発見: ${app.device.name}`);
+                
+                // 切断イベントリスナー追加
+                app.device.addEventListener('gattserverdisconnected', handleDisconnect);
+                
+                const server = await app.device.gatt.connect();
+                const service = await server.getPrimaryService(CONSTANTS.MIDI_SERVICE_UUID);
+                app.characteristic = await service.getCharacteristic(CONSTANTS.MIDI_CHAR_UUID);
+                
+                await app.characteristic.startNotifications();
+                app.characteristic.addEventListener('characteristicvaluechanged', handleMIDIData);
+                
+                app.connected = true;
+                updateConnectionStatus();
+                document.getElementById('connectionModal').classList.remove('show');
+                log('接続完了!');
+                
+            } catch (error) {
+                log(`エラー: ${error.message}`);
+                app.connected = false;
+                updateConnectionStatus();
+            }
+        }
+
+        function handleDisconnect() {
+            app.connected = false;
+            app.characteristic = null;
+            updateConnectionStatus();
+            log('BLE接続が切断されました');
+            
+            // 再接続モーダルを表示
+            setTimeout(() => {
+                if (!app.connected) {
+                    document.getElementById('connectionModal').classList.add('show');
+                }
+            }, 1000);
+        }
+
+        async function sendMIDI(status, data1, data2 = null) {
+            if (!app.characteristic) return;
+            
+            const timestamp = (Date.now() & 0x7F) | 0x80;
+            const packet = [0x80, timestamp, status, data1];
+            if (data2 !== null) packet.push(data2);
+            
+            try {
+                await app.characteristic.writeValue(new Uint8Array(packet));
+            } catch (error) {
+                if (error.name === 'NetworkError') {
+                    log('BLE接続エラー: 再接続が必要です');
+                    app.connected = false;
+                    updateConnectionStatus();
+                } else {
+                    log(`送信エラー: ${error.message}`);
+                }
+            }
+        }
+
+        function handleMIDIData(event) {
+            const value = event.target.value;
+            const data = [];
+            for (let i = 0; i < value.byteLength; i++) {
+                data.push(value.getUint8(i));
+            }
+            
+            if (data.length < 3) return;
+            
+            const statusIndex = (data[0] & 0x80) ? 2 : 1;
+            if (statusIndex >= data.length) return;
+            
+            const status = data[statusIndex];
+            const command = status & 0xF0;
+            
+            if (command === 0x90 && data.length > statusIndex + 2) {
+                const note = data[statusIndex + 1];
+                const velocity = data[statusIndex + 2];
+                handleNoteOn(note, velocity);
+            } else if (command === 0x80 && data.length > statusIndex + 1) {
+                const note = data[statusIndex + 1];
+                handleNoteOff(note);
+            } else if (command === 0xB0 && data.length > statusIndex + 2) {
+                const control = data[statusIndex + 1];
+                const value = data[statusIndex + 2];
+                handleControlChange(control, value);
+            }
+        }
+
+        function handleNoteOn(note, velocity) {
+            if (note >= 16) return;
+            
+            const button = document.querySelectorAll('.round-key')[note];
+            if (button && app.currentMode >= 4) {
+                button.classList.add('active');
+                playSynthSound(note, app.currentMode - 4);
+                
+                if (app.recordingLayer >= 4 && app.currentMode >= 4) {
+                    if (!app.loopDuration) {
+                        app.loopDuration = (60000 / app.bpm / 4) * 16;
+                    }
+                    const timestamp = Date.now() - app.recordingStartTime;
+                    app.synthPatterns[app.currentMode].push({
+                        note: note,
+                        timestamp: timestamp % app.loopDuration,
+                        played: false
+                    });
+                    log(`録音: Note ${note} at ${timestamp}ms`);
+                }
+            }
+        }
+
+        function handleNoteOff(note) {
+            if (note >= 16) return;
+            
+            const button = document.querySelectorAll('.round-key')[note];
+            if (button && app.currentMode >= 4) {
+                button.classList.remove('active');
+            }
+        }
+
+        function handleControlChange(control, value) {
+            if (control >= 16 && control < 32) {
+                const keyIndex = control - 16;
+                if (keyIndex < 16 && app.currentMode < 4) {
+                    app.rhythmPatterns[app.currentMode][keyIndex] = (value > 0);
+                    updateRoundKeys();
+                    log(`Pattern sync: Mode ${app.currentMode}, Key ${keyIndex} = ${value > 0}`);
+                }
+            } else if (control < 8) {
+                selectMode(control);
+            } 
+            // CC 0x42: ハードウェアからのリセット通知
+            else if (control === 0x42) {
+                // 全リズムパターンをクリア
+                for (let i = 0; i < 4; i++) {
+                    app.rhythmPatterns[i].fill(false);
+                }
+                
+                // 全シンセパターンをクリア
+                for (let i = 4; i < 8; i++) {
+                    app.synthPatterns[i] = [];
+                }
+                
+                // シーケンサーが再生中なら停止
+                if (app.isPlaying) {
+                    stopSequencer();
+                    document.getElementById('playBtn').classList.remove('active');
+                    app.isPlaying = false;
+                }
+                
+                // モードをKICK(0)に戻す
+                selectMode(0);
+                
+                // UI更新
+                updateRoundKeys();
+                
+                log('Full reset: All patterns cleared, sequencer stopped, BPM preserved');
+            }
+            // CC 0x53: ハードウェアからの録音モード開始通知
+            else if (control === 0x53) {
+                const targetMode = value;
+                if (targetMode >= 4 && targetMode <= 7) {
+                    // モード切替
+                    selectMode(targetMode);
+                    
+                    // 録音開始
+                    app.recordingLayer = targetMode;
+                    app.recordingStartTime = Date.now();
+                    app.synthPatterns[targetMode] = [];
+                    
+                    if (!app.loopDuration) {
+                        app.loopDuration = (60000 / app.bpm / 4) * 16;
+                    }
+                    
+                    // UI更新
+                    const squareKeys = document.querySelectorAll('.square-key');
+                    squareKeys[targetMode].classList.add('recording');
+                    
+                    log(`Hardware long press: Recording started on ${CONSTANTS.MODE_NAMES[targetMode]}`);
+                }
+            }
+        }
+
+        function selectMode(mode) {
+            app.currentMode = mode;
+            
+            document.querySelectorAll('.square-key').forEach((btn, i) => {
+                btn.classList.toggle('selected', i === mode);
+            });
+            
+            updateRoundKeys();
+            log(`Mode: ${CONSTANTS.MODE_NAMES[mode]}`);
+        }
+
+        function updateRoundKeys() {
+            const buttons = document.querySelectorAll('.round-key');
+            
+            if (app.currentMode < 4) {
+                const pattern = app.rhythmPatterns[app.currentMode];
+                buttons.forEach((btn, i) => {
+                    btn.classList.toggle('active', pattern[i]);
+                });
+            } else {
+                buttons.forEach(btn => btn.classList.remove('active'));
+            }
+        }
+
+        function resetAllPatterns() {
+            for (let i = 0; i < 4; i++) {
+                app.rhythmPatterns[i].fill(false);
+            }
+            
+            for (let i = 4; i < 8; i++) {
+                app.synthPatterns[i] = [];
+            }
+            
+            updateRoundKeys();
+            sendMIDI(0xB0, 0x42, 127);
+            log('All patterns reset');
+        }
+
+        // 正確なシーケンサー実装
+        function scheduleStep() {
+            if (!audioContext) initAudio();
+            
+            const stepDuration = 60 / app.bpm / 4;
+            
+            while (app.nextStepTime < audioContext.currentTime + CONSTANTS.SCHEDULE_AHEAD_TIME) {
+                playStepAtTime(app.currentStep, app.nextStepTime);
+                
+                app.nextStepTime += stepDuration;
+                app.currentStep = (app.currentStep + 1) % 16;
+            }
+            
+            if (app.isPlaying) {
+                app.animationFrameId = requestAnimationFrame(scheduleStep);
+            }
+        }
+
+        function playStepAtTime(step, time) {
+            // ドラムパターン再生
+            for (let layer = 0; layer < 4; layer++) {
+                if (app.rhythmPatterns[layer][step]) {
+                    setTimeout(() => {
+                        playDrumSound(layer);
+                        sendMIDI(0x90, step, 127);
+                        setTimeout(() => sendMIDI(0x80, step, 0), CONSTANTS.MIDI_NOTE_DURATION);
+                    }, (time - audioContext.currentTime) * 1000);
+                }
+            }
+            
+            // シンセパターン再生
+            const stepDuration = 60 / app.bpm / 4;
+            const currentTime = (step / 16) * app.loopDuration;
+            
+            for (let layer = 4; layer < 8; layer++) {
+                app.synthPatterns[layer].forEach(note => {
+                    const timeDiff = Math.abs(note.timestamp - currentTime);
+                    if (timeDiff < (stepDuration * 1000 * CONSTANTS.NOTE_TRIGGER_THRESHOLD) && !note.played) {
+                        setTimeout(() => {
+                            playSynthSound(note.note, layer - 4);
+                            sendMIDI(0x90, note.note, 127);
+                            setTimeout(() => sendMIDI(0x80, note.note, 0), 100);
+                        }, (time - audioContext.currentTime) * 1000);
+                        
+                        note.played = true;
+                        setTimeout(() => { note.played = false; }, stepDuration * 1000);
+                    }
+                });
+            }
+            
+            // UI更新(メインスレッドで)
+            setTimeout(() => {
+                document.querySelectorAll('.round-key').forEach(btn => {
+                    btn.classList.remove('indicator');
+                });
+                document.querySelectorAll('.round-key')[step]?.classList.add('indicator');
+            }, (time - audioContext.currentTime) * 1000);
+        }
+
+        function startSequencer() {
+            if (!audioContext) initAudio();
+            
+            if (app.animationFrameId) {
+                cancelAnimationFrame(app.animationFrameId);
+            }
+            
+            const stepDuration = 60 / app.bpm / 4;
+            app.loopDuration = stepDuration * 16 * 1000;
+            app.nextStepTime = audioContext.currentTime;
+            app.currentStep = 0;
+            
+            scheduleStep();
+        }
+
+        function stopSequencer() {
+            app.isPlaying = false;
+            
+            if (app.animationFrameId) {
+                cancelAnimationFrame(app.animationFrameId);
+                app.animationFrameId = null;
+            }
+            
+            document.querySelectorAll('.round-key').forEach(btn => {
+                btn.classList.remove('indicator');
+            });
+        }
+
+        function initUI() {
+            // 円ボタン生成
+            const roundKeysContainer = document.getElementById('roundKeys');
+            for (let i = 0; i < 16; i++) {
+                const button = document.createElement('div');
+                button.className = 'round-key';
+                button.textContent = i + 1;
+                button.dataset.index = i;
+                
+                const handlePointerDown = () => {
+                    if (app.currentMode < 4) {
+                        // ドラムマシンモード: トグルのみ、音は鳴らさない
+                        app.rhythmPatterns[app.currentMode][i] = !app.rhythmPatterns[app.currentMode][i];
+                        updateRoundKeys();
+                        sendMIDI(0xB0, 16 + i, app.rhythmPatterns[app.currentMode][i] ? 127 : 0);
+                    } else {
+                        // シンセモード: 押した時に音を鳴らす
+                        playSynthSound(i, app.currentMode - 4);
+                        button.classList.add('active');
+                        sendMIDI(0x90, i, 127);
+                    }
+                };
+                
+                const handlePointerUp = () => {
+                    if (app.currentMode >= 4) {
+                        button.classList.remove('active');
+                        sendMIDI(0x80, i, 0);
+                    }
+                };
+                
+                button.addEventListener('pointerdown', handlePointerDown);
+                button.addEventListener('pointerup', handlePointerUp);
+                button.addEventListener('pointercancel', handlePointerUp);
+                button.addEventListener('pointerleave', handlePointerUp);
+                
+                roundKeysContainer.appendChild(button);
+            }
+            
+            // 四角ボタン生成
+            const squareKeysContainer = document.getElementById('squareKeys');
+            CONSTANTS.MODE_NAMES.forEach((name, i) => {
+                const button = document.createElement('div');
+                button.className = 'square-key';
+                button.textContent = name;
+                button.dataset.index = i;
+                
+                if (i === 0) button.classList.add('selected');
+                
+                let longPressTimer;
+                
+                const handlePointerDown = () => {
+                    longPressTimer = setTimeout(() => {
+                        if (i >= 4) {
+                            button.classList.add('recording');
+                            app.recordingLayer = i;
+                            app.recordingStartTime = Date.now();
+                            app.synthPatterns[i] = [];
+                            
+                            if (!app.loopDuration) {
+                                app.loopDuration = (60000 / app.bpm / 4) * 16;
+                            }
+                            
+                            log(`録音開始: ${name}`);
+                        }
+                    }, CONSTANTS.LONG_PRESS_DURATION);
+                };
+                
+                const handlePointerEnd = () => {
+                    clearTimeout(longPressTimer);
+                    
+                    if (button.classList.contains('recording')) {
+                        button.classList.remove('recording');
+                        app.recordingLayer = -1;
+                        log(`録音終了: ${name}`);
+                    } else {
+                        selectMode(i);
+                        sendMIDI(0xB0, i, 127);
+                    }
+                };
+                
+                button.addEventListener('pointerdown', handlePointerDown);
+                button.addEventListener('pointerup', handlePointerEnd);
+                button.addEventListener('pointercancel', handlePointerEnd);
+                button.addEventListener('pointerleave', handlePointerEnd);
+                
+                squareKeysContainer.appendChild(button);
+            });
+            
+            // Transport controls
+            document.getElementById('playBtn').addEventListener('click', () => {
+                app.isPlaying = true;
+                document.getElementById('playBtn').classList.add('active');
+                sendMIDI(0xB0, 0x40, 127);
+                startSequencer();
+                log('Play');
+            });
+            
+            document.getElementById('stopBtn').addEventListener('click', () => {
+                document.getElementById('playBtn').classList.remove('active');
+                sendMIDI(0xB0, 0x40, 0);
+                stopSequencer();
+                log('Stop');
+            });
+            
+            document.getElementById('resetBtn').addEventListener('click', resetAllPatterns);
+            
+            const bpmSlider = document.getElementById('bpmSlider');
+            const bpmDisplay = document.getElementById('bpmDisplay');
+            
+            bpmSlider.addEventListener('input', () => {
+                app.bpm = parseInt(bpmSlider.value);
+                bpmDisplay.textContent = app.bpm;
+                sendMIDI(0xB0, 0x41, app.bpm - 60);
+                if (app.isPlaying) startSequencer();
+            });
+            
+            document.getElementById('tapBtn').addEventListener('click', () => {
+                const now = Date.now();
+                
+                // 古いタップを削除
+                app.tapTimes = app.tapTimes.filter(t => now - t < CONSTANTS.TAP_TIMEOUT);
+                app.tapTimes.push(now);
+                
+                if (app.tapTimes.length > 4) {
+                    app.tapTimes.shift();
+                }
+                
+                if (app.tapTimes.length >= 2) {
+                    const intervals = [];
+                    for (let i = 1; i < app.tapTimes.length; i++) {
+                        intervals.push(app.tapTimes[i] - app.tapTimes[i-1]);
+                    }
+                    const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+                    const bpm = Math.round(60000 / avgInterval);
+                    
+                    if (bpm >= 60 && bpm <= 200) {
+                        app.bpm = bpm;
+                        bpmSlider.value = bpm;
+                        bpmDisplay.textContent = bpm;
+                        sendMIDI(0xB0, 0x41, bpm - 60);
+                        if (app.isPlaying) startSequencer();
+                    }
+                }
+            });
+            
+            document.getElementById('debugBtn').addEventListener('click', () => {
+                document.getElementById('debugLog').classList.toggle('visible');
+            });
+            
+            document.getElementById('connectBtn').addEventListener('click', connectBLE);
+            document.getElementById('closeModalBtn').addEventListener('click', () => {
+                document.getElementById('connectionModal').classList.remove('show');
+            });
+        }
+
+        function updateConnectionStatus() {
+            const status = document.getElementById('connectionStatus');
+            if (app.connected) {
+                status.textContent = '接続済み';
+                status.classList.add('connected');
+            } else {
+                status.textContent = '未接続';
+                status.classList.remove('connected');
+            }
+        }
+
+        // クリーンアップ処理
+        window.addEventListener('beforeunload', () => {
+            stopSequencer();
+            
+            if (audioContext) {
+                activeNodes.forEach(node => cleanupNode(node));
+                audioContext.close();
+            }
+            
+            if (app.device?.gatt?.connected) {
+                app.device.gatt.disconnect();
+            }
+        });
+
+        // 初期化
+        window.addEventListener('DOMContentLoaded', () => {
+            initUI();
+            
+            document.body.addEventListener('click', () => {
+                initAudio();
+            }, { once: true });
+            
+            setTimeout(() => {
+                if (!app.connected) {
+                    document.getElementById('connectionModal').classList.add('show');
+                }
+            }, 500);
+            
+            if (!navigator.bluetooth) {
+                log('⚠️ Web Bluetooth非対応');
+                alert('このブラウザはBLE非対応です。\nChromeまたはBluefyを使用してください。');
+            }
+        });
+    </script>
+</body>
+</html>
