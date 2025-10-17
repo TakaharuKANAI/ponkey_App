@@ -753,10 +753,20 @@
                 
                 log('Full reset: All patterns cleared, sequencer stopped, BPM preserved');
             }
-            // CC 0x53: ハードウェアからの録音モード開始通知
+            // CC 0x53: ハードウェアからの録音モード開始/終了通知
             else if (control === 0x53) {
                 const targetMode = value;
-                if (targetMode >= 4 && targetMode <= 7) {
+                
+                if (targetMode === 0) {
+                    // value=0: 録音終了
+                    if (app.recordingLayer >= 4) {
+                        const squareKeys = document.querySelectorAll('.square-key');
+                        squareKeys[app.recordingLayer].classList.remove('recording');
+                        log(`Hardware key released: Recording stopped on ${CONSTANTS.MODE_NAMES[app.recordingLayer]}`);
+                        app.recordingLayer = -1;
+                    }
+                } else if (targetMode >= 4 && targetMode <= 7) {
+                    // value=4-7: 録音開始
                     // モード切替
                     selectMode(targetMode);
                     
@@ -774,6 +784,20 @@
                     squareKeys[targetMode].classList.add('recording');
                     
                     log(`Hardware long press: Recording started on ${CONSTANTS.MODE_NAMES[targetMode]}`);
+                }
+            }
+            // CC 0x54: ハードウェアからのステップ同期
+            else if (control === 0x54) {
+                // 実機からのステップ位置でインジケータを同期
+                const step = value;
+                if (step < 16) {
+                    app.currentStep = step;
+                    
+                    // UI更新(インジケータのみ)
+                    document.querySelectorAll('.round-key').forEach(btn => {
+                        btn.classList.remove('indicator');
+                    });
+                    document.querySelectorAll('.round-key')[step]?.classList.add('indicator');
                 }
             }
         }
@@ -840,8 +864,9 @@
                 if (app.rhythmPatterns[layer][step]) {
                     setTimeout(() => {
                         playDrumSound(layer);
-                        sendMIDI(0x90, step, 127);
-                        setTimeout(() => sendMIDI(0x80, step, 0), CONSTANTS.MIDI_NOTE_DURATION);
+                        // MIDIは送信しない(実機側が再生をコントロール)
+                        // sendMIDI(0x90, step, 127);
+                        // setTimeout(() => sendMIDI(0x80, step, 0), CONSTANTS.MIDI_NOTE_DURATION);
                     }, (time - audioContext.currentTime) * 1000);
                 }
             }
@@ -856,8 +881,9 @@
                     if (timeDiff < (stepDuration * 1000 * CONSTANTS.NOTE_TRIGGER_THRESHOLD) && !note.played) {
                         setTimeout(() => {
                             playSynthSound(note.note, layer - 4);
-                            sendMIDI(0x90, note.note, 127);
-                            setTimeout(() => sendMIDI(0x80, note.note, 0), 100);
+                            // MIDIは送信しない(実機側が再生をコントロール)
+                            // sendMIDI(0x90, note.note, 127);
+                            // setTimeout(() => sendMIDI(0x80, note.note, 0), 100);
                         }, (time - audioContext.currentTime) * 1000);
                         
                         note.played = true;
