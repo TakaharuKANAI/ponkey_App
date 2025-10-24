@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>ponkey controller v2.4</title>
+    <title>ponkey controller v2.5</title>
     <style>
         * {
             margin: 0;
@@ -17,6 +17,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-weight: 300;
             background: #f5f5f5;
             display: flex;
             justify-content: center;
@@ -76,7 +77,7 @@
             background: #e8e8e8;
             color: #333;
             font-size: 14px;
-            font-weight: bold;
+            font-weight: 400;
             cursor: pointer;
             transition: transform 0.2s, background 0.2s;
         }
@@ -115,10 +116,35 @@
         }
 
         .bpm-display {
-            font-weight: bold;
+            font-weight: 400;
             color: #333;
             min-width: 40px;
             text-align: center;
+        }
+
+        .soundset-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #e8e8e8;
+            padding: 5px 12px;
+            border-radius: 8px;
+        }
+
+        .soundset-selector label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 400;
+        }
+
+        .soundset-selector select {
+            padding: 4px 8px;
+            border: 1px solid #999;
+            border-radius: 4px;
+            background: white;
+            color: #333;
+            font-size: 12px;
+            cursor: pointer;
         }
 
         .round-keys-container {
@@ -149,7 +175,7 @@
             justify-content: center;
             font-size: 14px;
             color: #666;
-            font-weight: bold;
+            font-weight: 400;
         }
 
         .round-key:active {
@@ -189,7 +215,7 @@
             cursor: pointer;
             text-align: center;
             font-size: 12px;
-            font-weight: bold;
+            font-weight: 400;
             color: #555;
             transition: transform 0.2s, background 0.2s;
             position: relative;
@@ -263,39 +289,58 @@
             border-radius: 15px;
             max-width: 400px;
             width: 90%;
+            text-align: center;
         }
 
-        .modal button {
-            width: 100%;
-            padding: 15px;
-            margin-top: 10px;
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 300;
+        }
+
+        .modal-content button {
+            padding: 12px 30px;
             border: none;
             border-radius: 8px;
             background: #4a4a4a;
             color: white;
             font-size: 16px;
+            font-weight: 300;
             cursor: pointer;
+            margin: 10px;
+        }
+
+        .modal-content button:hover {
+            background: #333;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1 class="title">ponkey</h1>
+            <div class="title">PONKEY</div>
             <div class="connection-status" id="connectionStatus">未接続</div>
         </div>
 
         <div class="transport">
-            <button id="playBtn">▶ Play</button>
-            <button id="stopBtn">◼ Stop</button>
-            <button id="resetBtn">Reset</button>
-            <button id="tapBtn">Tap Tempo</button>
+            <button id="playBtn">PLAY</button>
+            <button id="stopBtn">STOP</button>
+            <button id="resetBtn">RESET</button>
             <div class="bpm-control">
-                <label>BPM:</label>
+                <label>BPM</label>
                 <input type="range" id="bpmSlider" min="60" max="200" value="100">
-                <div class="bpm-display" id="bpmDisplay">100</div>
+                <span class="bpm-display" id="bpmDisplay">100</span>
             </div>
-            <button id="debugBtn">Debug</button>
+            <button id="tapBtn">TAP</button>
+            <button id="debugBtn">DEBUG</button>
+            <div class="soundset-selector">
+                <label>SOUND</label>
+                <select id="soundsetSelector">
+                    <option value="0">STANDARD</option>
+                    <option value="1">8BIT</option>
+                    <option value="2">UNIQUE</option>
+                </select>
+            </div>
         </div>
 
         <div class="round-keys-container">
@@ -309,613 +354,1149 @@
 
     <div class="modal" id="connectionModal">
         <div class="modal-content">
-            <h2>ponkey接続</h2>
-            <p style="margin: 20px 0; color: #666;">BLE-MIDI機器を検索します</p>
-            <button id="connectBtn">接続</button>
-            <button id="closeModalBtn" style="background: #999;">キャンセル</button>
+            <h2>Connect PONKEY</h2>
+            <button id="connectBtn">Connect</button>
+            <button id="closeModalBtn">Cancel</button>
         </div>
     </div>
 
     <script>
-        // 定数定義
         const CONSTANTS = {
-            MIDI_NOTE_DURATION: 50,
-            NOTE_TRIGGER_THRESHOLD: 0.5,
+            SERVICE_UUID: '03b80e5a-ede8-4b33-a751-6ce34ec4c700',
+            CHARACTERISTIC_UUID: '7772e5db-3868-4112-a1a9-f2669d106bf3',
+            MODE_NAMES: ['KICK', 'SNARE', 'HAT', 'PERC', 'PAD', 'LEAD', 'PLUCK', 'BELL'],
             TAP_TIMEOUT: 2000,
             LONG_PRESS_DURATION: 500,
-            SCHEDULE_AHEAD_TIME: 0.1,
-            MODE_NAMES: ['KICK', 'SNARE', 'HAT', 'PERC', 'PAD', 'LEAD', 'PLUCK', 'BELL'],
-            MIDI_SERVICE_UUID: '03b80e5a-ede8-4b33-a751-6ce34ec4c700',
-            MIDI_CHAR_UUID: '7772e5db-3868-4112-a1a9-f2669d106bf3'
+            CC_BAR_SYNC: 0x54,
+            CC_RECORDING_MODE: 0x53,
+            SOLENOID_DURATION: 50  // ソレノイド駆動時間を50msに統一
         };
 
-        // Web Audio API
         let audioContext = null;
-        const activeNodes = new Set();
+        let activeNodes = [];
+
+        const app = {
+            connected: false,
+            device: null,
+            characteristic: null,
+            currentMode: 0,
+            currentSoundset: 0,  // 0: STANDARD, 1: 8BIT, 2: UNIQUE
+            bpm: 100,
+            rhythmPatterns: [
+                Array(16).fill(false),
+                Array(16).fill(false),
+                Array(16).fill(false),
+                Array(16).fill(false)
+            ],
+            synthPatterns: Array(8).fill(null).map(() => []),
+            recordingLayer: -1,
+            recordingStartTime: 0,
+            loopDuration: 0,
+            loopStartTime: 0,
+            isPlaying: false,
+            tapTimes: []
+        };
+
+        function log(message) {
+            const debugLog = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            debugLog.innerHTML += `[${timestamp}] ${message}\n`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(message);
+        }
 
         function initAudio() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
+            if (audioContext) return;
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            log('Audio initialized');
         }
 
         function cleanupNode(node) {
             try {
-                node.disconnect();
-                activeNodes.delete(node);
+                if (node.gain) node.gain.cancelScheduledValues(audioContext.currentTime);
+                if (node.frequency) node.frequency.cancelScheduledValues(audioContext.currentTime);
+                if (node.stop) node.stop();
+                if (node.disconnect) node.disconnect();
             } catch (e) {}
         }
 
-        // ドラムサウンド生成(メモリリーク修正版)
-        function playDrumSound(type) {
+        // ========== SOUNDSET 0: STANDARD (現在のサウンド) ==========
+        function playDrumSound_Standard(part, time) {
             if (!audioContext) initAudio();
-            
-            const now = audioContext.currentTime;
-            const osc = audioContext.createOscillator();
-            const gain = audioContext.createGain();
-            
-            activeNodes.add(osc);
-            activeNodes.add(gain);
-            
-            osc.connect(gain);
-            gain.connect(audioContext.destination);
-            
-            osc.onended = () => {
-                cleanupNode(gain);
-                cleanupNode(osc);
-            };
-            
-            switch(type) {
-                case 0: // KICK
-                    osc.frequency.setValueAtTime(60, now);
-                    osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
-                    gain.gain.setValueAtTime(2.0, now);  // 音量を2倍に増加
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-                    osc.start(now);
-                    osc.stop(now + 0.5);
-                    break;
-                    
-                case 1: // SNARE
-                    const bufferSize = audioContext.sampleRate * 0.1;
-                    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-                    const output = buffer.getChannelData(0);
-                    for (let i = 0; i < bufferSize; i++) {
-                        output[i] = Math.random() * 2 - 1;
-                    }
-                    const noise = audioContext.createBufferSource();
-                    noise.buffer = buffer;
-                    const noiseGain = audioContext.createGain();
-                    
-                    activeNodes.add(noise);
-                    activeNodes.add(noiseGain);
-                    
-                    noise.connect(noiseGain);
-                    noiseGain.connect(audioContext.destination);
-                    noiseGain.gain.setValueAtTime(0.5, now);
-                    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                    
-                    noise.onended = () => {
-                        cleanupNode(noiseGain);
-                        cleanupNode(noise);
-                    };
-                    
-                    noise.start(now);
-                    noise.stop(now + 0.1);
-                    
-                    cleanupNode(gain);
+            const now = time || audioContext.currentTime;
+
+            if (part === 0) {
+                // KICK: 低音で重厚感のあるキック
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.05);
+                
+                gain.gain.setValueAtTime(1.0, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                
+                osc.start(now);
+                osc.stop(now + 0.4);
+                
+                activeNodes.push(osc);
+                setTimeout(() => {
+                    const index = activeNodes.indexOf(osc);
+                    if (index > -1) activeNodes.splice(index, 1);
                     cleanupNode(osc);
-                    return;
-                    
-                case 2: // HAT
-                    osc.frequency.setValueAtTime(8000, now);
-                    gain.gain.setValueAtTime(0.3, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-                    osc.start(now);
-                    osc.stop(now + 0.05);
-                    break;
-                    
-                case 3: // PERC
-                    osc.frequency.setValueAtTime(1000, now);
-                    osc.frequency.exponentialRampToValueAtTime(400, now + 0.03);
-                    gain.gain.setValueAtTime(0.5, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                    osc.start(now);
-                    osc.stop(now + 0.1);
-                    break;
+                }, 500);
+                
+            } else if (part === 1) {
+                // SNARE: スネアドラムらしい音
+                const bufferSize = audioContext.sampleRate * 0.2;
+                const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                
+                const noise = audioContext.createBufferSource();
+                const noiseFilter = audioContext.createBiquadFilter();
+                const noiseGain = audioContext.createGain();
+                
+                noise.buffer = buffer;
+                noise.connect(noiseFilter);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(audioContext.destination);
+                
+                noiseFilter.type = 'bandpass';
+                noiseFilter.frequency.setValueAtTime(3000, now);
+                noiseFilter.Q.setValueAtTime(1, now);
+                
+                noiseGain.gain.setValueAtTime(0.5, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                
+                noise.start(now);
+                noise.stop(now + 0.2);
+                
+                const osc = audioContext.createOscillator();
+                const oscGain = audioContext.createGain();
+                
+                osc.connect(oscGain);
+                oscGain.connect(audioContext.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, now);
+                
+                oscGain.gain.setValueAtTime(0.15, now);
+                oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                
+                osc.start(now);
+                osc.stop(now + 0.1);
+                
+                activeNodes.push(noise, osc);
+                setTimeout(() => {
+                    cleanupNode(noise);
+                    cleanupNode(osc);
+                }, 250);
+                
+            } else if (part === 2) {
+                // HAT: 短いノイズバースト
+                const bufferSize = audioContext.sampleRate * 0.05;
+                const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                
+                const noise = audioContext.createBufferSource();
+                const filter = audioContext.createBiquadFilter();
+                const gain = audioContext.createGain();
+                
+                noise.buffer = buffer;
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(8000, now);
+                filter.Q.setValueAtTime(1, now);
+                
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                
+                noise.start(now);
+                noise.stop(now + 0.05);
+                
+                activeNodes.push(noise);
+                setTimeout(() => {
+                    cleanupNode(noise);
+                }, 100);
+                
+            } else if (part === 3) {
+                // PERC: メタリックなパーカッション
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const filter = audioContext.createBiquadFilter();
+                
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.1);
+                
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(2000, now);
+                filter.Q.setValueAtTime(5, now);
+                
+                gain.gain.setValueAtTime(0.8, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                
+                osc.start(now);
+                osc.stop(now + 0.1);
+                
+                activeNodes.push(osc);
+                setTimeout(() => {
+                    cleanupNode(osc);
+                }, 150);
             }
         }
 
-        // シンセサウンド生成(メモリリーク修正版)
-        function playSynthSound(noteIndex, synthType) {
+        function playSynthSound_Standard(note, synthType) {
             if (!audioContext) initAudio();
-            
+
+            const baseFreq = 440 * Math.pow(2, (note - 9) / 12);
             const now = audioContext.currentTime;
-            const frequencies = [
-                261.63, 293.66, 329.63, 392.00,
-                440.00, 523.25, 587.33, 659.25,
-                783.99, 880.00, 1046.50, 1174.66,
-                1318.51, 1567.98, 1760.00, 2093.00
-            ];
-            
-            const freq = frequencies[noteIndex] || 440;
-            
-            switch(synthType) {
-                case 0: // PAD
-                    const osc1 = audioContext.createOscillator();
-                    const gain1 = audioContext.createGain();
-                    activeNodes.add(osc1);
-                    activeNodes.add(gain1);
-                    
-                    osc1.frequency.setValueAtTime(freq, now);
-                    osc1.type = 'sine';
-                    osc1.connect(gain1);
-                    gain1.connect(audioContext.destination);
-                    gain1.gain.setValueAtTime(0.3, now);
-                    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-                    
-                    osc1.onended = () => {
-                        cleanupNode(gain1);
-                        cleanupNode(osc1);
-                    };
-                    
-                    osc1.start(now);
-                    osc1.stop(now + 0.5);
-                    break;
-                    
-                case 1: // LEAD
-                    const osc2 = audioContext.createOscillator();
-                    const gain2 = audioContext.createGain();
-                    const filter2 = audioContext.createBiquadFilter();
-                    activeNodes.add(osc2);
-                    activeNodes.add(gain2);
-                    activeNodes.add(filter2);
-                    
-                    osc2.frequency.setValueAtTime(freq, now);
-                    osc2.type = 'sawtooth';
-                    osc2.connect(filter2);
-                    filter2.connect(gain2);
-                    filter2.type = 'lowpass';
-                    filter2.frequency.setValueAtTime(2000, now);
-                    filter2.frequency.exponentialRampToValueAtTime(500, now + 0.3);
-                    gain2.connect(audioContext.destination);
-                    gain2.gain.setValueAtTime(0.2, now);
-                    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-                    
-                    osc2.onended = () => {
-                        cleanupNode(filter2);
-                        cleanupNode(gain2);
-                        cleanupNode(osc2);
-                    };
-                    
-                    osc2.start(now);
-                    osc2.stop(now + 0.3);
-                    break;
-                    
-                case 2: // PLUCK
-                    const osc3 = audioContext.createOscillator();
-                    const gain3 = audioContext.createGain();
-                    activeNodes.add(osc3);
-                    activeNodes.add(gain3);
-                    
-                    osc3.frequency.setValueAtTime(freq, now);
-                    osc3.type = 'square';
-                    osc3.connect(gain3);
-                    gain3.connect(audioContext.destination);
-                    gain3.gain.setValueAtTime(0.25, now);
-                    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                    
-                    osc3.onended = () => {
-                        cleanupNode(gain3);
-                        cleanupNode(osc3);
-                    };
-                    
-                    osc3.start(now);
-                    osc3.stop(now + 0.2);
-                    break;
-                    
-                case 3: // BELL
-                    const osc4a = audioContext.createOscillator();
-                    const osc4b = audioContext.createOscillator();
-                    const gain4 = audioContext.createGain();
-                    activeNodes.add(osc4a);
-                    activeNodes.add(osc4b);
-                    activeNodes.add(gain4);
-                    
-                    osc4a.frequency.setValueAtTime(freq, now);
-                    osc4b.frequency.setValueAtTime(freq * 2.1, now);
-                    osc4a.type = 'triangle';
-                    osc4b.type = 'triangle';
-                    osc4a.connect(gain4);
-                    osc4b.connect(gain4);
-                    gain4.connect(audioContext.destination);
-                    gain4.gain.setValueAtTime(0.2, now);
-                    gain4.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-                    
-                    osc4a.onended = () => {
-                        cleanupNode(gain4);
-                        cleanupNode(osc4a);
-                        cleanupNode(osc4b);
-                    };
-                    
-                    osc4a.start(now);
-                    osc4b.start(now);
-                    osc4a.stop(now + 0.8);
-                    osc4b.stop(now + 0.8);
-                    break;
+
+            if (synthType === 0) {
+                // PAD: 柔らかく広がりのあるパッド
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const filter = audioContext.createBiquadFilter();
+                
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'sawtooth';
+                osc2.type = 'sawtooth';
+                osc1.frequency.setValueAtTime(baseFreq, now);
+                osc2.frequency.setValueAtTime(baseFreq * 1.01, now);
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, now);
+                filter.frequency.linearRampToValueAtTime(2000, now + 0.15);
+                filter.Q.setValueAtTime(3, now);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.15, now + 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.75);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.75);
+                osc2.stop(now + 0.75);
+                
+                activeNodes.push(osc1, osc2);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                }, 800);
+                
+            } else if (synthType === 1) {
+                // LEAD: シャープでアタックのあるリード
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const filter = audioContext.createBiquadFilter();
+                
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(5000, now);
+                filter.frequency.exponentialRampToValueAtTime(1500, now + 0.3);
+                filter.Q.setValueAtTime(8, now);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.2, now + 0.005);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                
+                osc.start(now);
+                osc.stop(now + 0.6);
+                
+                activeNodes.push(osc);
+                setTimeout(() => {
+                    cleanupNode(osc);
+                }, 700);
+                
+            } else if (synthType === 2) {
+                // PLUCK: 短く弾けるような音
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const filter = audioContext.createBiquadFilter();
+                
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(4000, now);
+                filter.frequency.exponentialRampToValueAtTime(500, now + 0.15);
+                filter.Q.setValueAtTime(2, now);
+                
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                
+                osc.start(now);
+                osc.stop(now + 0.25);
+                
+                activeNodes.push(osc);
+                setTimeout(() => {
+                    cleanupNode(osc);
+                }, 300);
+                
+            } else if (synthType === 3) {
+                // BELL: 澄んだベル音
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const osc3 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                osc3.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'sine';
+                osc2.type = 'sine';
+                osc3.type = 'sine';
+                osc1.frequency.setValueAtTime(baseFreq, now);
+                osc2.frequency.setValueAtTime(baseFreq * 2.76, now);
+                osc3.frequency.setValueAtTime(baseFreq * 5.4, now);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.15, now + 0.002);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc3.start(now);
+                osc1.stop(now + 1.2);
+                osc2.stop(now + 1.2);
+                osc3.stop(now + 1.2);
+                
+                activeNodes.push(osc1, osc2, osc3);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                    cleanupNode(osc3);
+                }, 1300);
             }
         }
 
-        // アプリケーション状態
-        const app = {
-            device: null,
-            characteristic: null,
-            connected: false,
-            currentMode: 0,
-            isPlaying: false,
-            bpm: 100,
-            currentStep: 0,
-            nextStepTime: 0,
-            animationFrameId: null,
-            tapTimes: [],
-            recordingLayer: -1,
-            recordingStartTime: 0,
-            loopDuration: 0,
-            rhythmPatterns: {
-                0: Array(16).fill(false),
-                1: Array(16).fill(false),
-                2: Array(16).fill(false),
-                3: Array(16).fill(false)
-            },
-            synthPatterns: {
-                4: [],
-                5: [],
-                6: [],
-                7: []
-            }
-        };
+        // ========== SOUNDSET 1: 8BIT スタイル ==========
+        function playDrumSound_8Bit(part, time) {
+            if (!audioContext) initAudio();
+            const now = time || audioContext.currentTime;
 
-        function log(msg) {
-            const debugLog = document.getElementById('debugLog');
-            const time = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.textContent = `[${time}] ${msg}`;
-            debugLog.appendChild(logEntry);
-            debugLog.scrollTop = debugLog.scrollHeight;
-            console.log(msg);
+            if (part === 0) {
+                // KICK: 8bit風キック - 短い矩形波のピッチ下降
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.08);
+                
+                gain.gain.setValueAtTime(0.8, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                
+                osc.start(now);
+                osc.stop(now + 0.15);
+                
+                activeNodes.push(osc);
+                setTimeout(() => cleanupNode(osc), 200);
+                
+            } else if (part === 1) {
+                // SNARE: 8bit風スネア - ノイズバーストとトーン
+                const bufferSize = audioContext.sampleRate * 0.08;
+                const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                
+                const noise = audioContext.createBufferSource();
+                const gain = audioContext.createGain();
+                
+                noise.buffer = buffer;
+                noise.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                
+                noise.start(now);
+                noise.stop(now + 0.08);
+                
+                activeNodes.push(noise);
+                setTimeout(() => cleanupNode(noise), 100);
+                
+            } else if (part === 2) {
+                // HAT: 8bit風ハイハット - 短い高周波ノイズ
+                const bufferSize = audioContext.sampleRate * 0.03;
+                const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                
+                const noise = audioContext.createBufferSource();
+                const filter = audioContext.createBiquadFilter();
+                const gain = audioContext.createGain();
+                
+                noise.buffer = buffer;
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(10000, now);
+                
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+                
+                noise.start(now);
+                noise.stop(now + 0.03);
+                
+                activeNodes.push(noise);
+                setTimeout(() => cleanupNode(noise), 50);
+                
+            } else if (part === 3) {
+                // PERC: 8bit風パーカッション - 三角波のピッチスイープ
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(400, now + 0.06);
+                
+                gain.gain.setValueAtTime(0.5, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+                
+                osc.start(now);
+                osc.stop(now + 0.06);
+                
+                activeNodes.push(osc);
+                setTimeout(() => cleanupNode(osc), 80);
+            }
+        }
+
+        function playSynthSound_8Bit(note, synthType) {
+            if (!audioContext) initAudio();
+
+            const baseFreq = 440 * Math.pow(2, (note - 9) / 12);
+            const now = audioContext.currentTime;
+
+            if (synthType === 0) {
+                // PAD: 8bit風パッド - パルス波の厚み
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'square';
+                osc2.type = 'square';
+                osc1.frequency.setValueAtTime(baseFreq, now);
+                osc2.frequency.setValueAtTime(baseFreq * 1.005, now);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.5);
+                osc2.stop(now + 0.5);
+                
+                activeNodes.push(osc1, osc2);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                }, 550);
+                
+            } else if (synthType === 1) {
+                // LEAD: 8bit風リード - パルス波
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                
+                osc.start(now);
+                osc.stop(now + 0.3);
+                
+                activeNodes.push(osc);
+                setTimeout(() => cleanupNode(osc), 350);
+                
+            } else if (synthType === 2) {
+                // PLUCK: 8bit風プラック - 三角波
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                
+                osc.start(now);
+                osc.stop(now + 0.2);
+                
+                activeNodes.push(osc);
+                setTimeout(() => cleanupNode(osc), 250);
+                
+            } else if (synthType === 3) {
+                // BELL: 8bit風ベル - パルス波の倍音
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'square';
+                osc2.type = 'square';
+                osc1.frequency.setValueAtTime(baseFreq, now);
+                osc2.frequency.setValueAtTime(baseFreq * 2, now);
+                
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.6);
+                osc2.stop(now + 0.6);
+                
+                activeNodes.push(osc1, osc2);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                }, 650);
+            }
+        }
+
+        // ========== SOUNDSET 2: UNIQUE (ユニークな実験的サウンド) ==========
+        function playDrumSound_Unique(part, time) {
+            if (!audioContext) initAudio();
+            const now = time || audioContext.currentTime;
+
+            if (part === 0) {
+                // KICK: FM風の複雑なキック
+                const carrier = audioContext.createOscillator();
+                const modulator = audioContext.createOscillator();
+                const modGain = audioContext.createGain();
+                const gain = audioContext.createGain();
+                
+                modulator.connect(modGain);
+                modGain.connect(carrier.frequency);
+                carrier.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                carrier.type = 'sine';
+                modulator.type = 'sine';
+                carrier.frequency.setValueAtTime(120, now);
+                modulator.frequency.setValueAtTime(60, now);
+                modGain.gain.setValueAtTime(80, now);
+                modGain.gain.exponentialRampToValueAtTime(0.1, now + 0.2);
+                
+                gain.gain.setValueAtTime(0.9, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                
+                carrier.start(now);
+                modulator.start(now);
+                carrier.stop(now + 0.3);
+                modulator.stop(now + 0.3);
+                
+                activeNodes.push(carrier, modulator);
+                setTimeout(() => {
+                    cleanupNode(carrier);
+                    cleanupNode(modulator);
+                }, 350);
+                
+            } else if (part === 1) {
+                // SNARE: 金属的なリング変調スネア
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'square';
+                osc2.type = 'sawtooth';
+                osc1.frequency.setValueAtTime(277, now);
+                osc2.frequency.setValueAtTime(311, now);
+                
+                gain.gain.setValueAtTime(0.6, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.15);
+                osc2.stop(now + 0.15);
+                
+                activeNodes.push(osc1, osc2);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                }, 200);
+                
+            } else if (part === 2) {
+                // HAT: 複数トーンの倍音ハイハット
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const osc3 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                osc3.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'square';
+                osc2.type = 'square';
+                osc3.type = 'square';
+                osc1.frequency.setValueAtTime(4000, now);
+                osc2.frequency.setValueAtTime(4400, now);
+                osc3.frequency.setValueAtTime(4800, now);
+                
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc3.start(now);
+                osc1.stop(now + 0.04);
+                osc2.stop(now + 0.04);
+                osc3.stop(now + 0.04);
+                
+                activeNodes.push(osc1, osc2, osc3);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                    cleanupNode(osc3);
+                }, 60);
+                
+            } else if (part === 3) {
+                // PERC: ウォブルベースっぽいパーカッション
+                const osc = audioContext.createOscillator();
+                const filter = audioContext.createBiquadFilter();
+                const gain = audioContext.createGain();
+                const lfo = audioContext.createOscillator();
+                const lfoGain = audioContext.createGain();
+                
+                lfo.connect(lfoGain);
+                lfoGain.connect(filter.frequency);
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1000, now);
+                filter.Q.setValueAtTime(10, now);
+                
+                lfo.type = 'sine';
+                lfo.frequency.setValueAtTime(50, now);
+                lfoGain.gain.setValueAtTime(800, now);
+                
+                gain.gain.setValueAtTime(0.7, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                
+                osc.start(now);
+                lfo.start(now);
+                osc.stop(now + 0.12);
+                lfo.stop(now + 0.12);
+                
+                activeNodes.push(osc, lfo);
+                setTimeout(() => {
+                    cleanupNode(osc);
+                    cleanupNode(lfo);
+                }, 150);
+            }
+        }
+
+        function playSynthSound_Unique(note, synthType) {
+            if (!audioContext) initAudio();
+
+            const baseFreq = 440 * Math.pow(2, (note - 9) / 12);
+            const now = audioContext.currentTime;
+
+            if (synthType === 0) {
+                // PAD: デチューンとコーラス効果の厚いパッド
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const osc3 = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const filter = audioContext.createBiquadFilter();
+                
+                osc1.connect(filter);
+                osc2.connect(filter);
+                osc3.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc1.type = 'sawtooth';
+                osc2.type = 'sawtooth';
+                osc3.type = 'sine';
+                osc1.frequency.setValueAtTime(baseFreq, now);
+                osc2.frequency.setValueAtTime(baseFreq * 1.02, now);
+                osc3.frequency.setValueAtTime(baseFreq * 2.01, now);
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(600, now);
+                filter.frequency.linearRampToValueAtTime(1800, now + 0.2);
+                filter.Q.setValueAtTime(5, now);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.1, now + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                
+                osc1.start(now);
+                osc2.start(now);
+                osc3.start(now);
+                osc1.stop(now + 0.8);
+                osc2.stop(now + 0.8);
+                osc3.stop(now + 0.8);
+                
+                activeNodes.push(osc1, osc2, osc3);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                    cleanupNode(osc3);
+                }, 850);
+                
+            } else if (synthType === 1) {
+                // LEAD: PWM風のモジュレーション
+                const osc1 = audioContext.createOscillator();
+                const osc2 = audioContext.createOscillator();
+                const gain1 = audioContext.createGain();
+                const gain2 = audioContext.createGain();
+                const masterGain = audioContext.createGain();
+                const lfo = audioContext.createOscillator();
+                const lfoGain = audioContext.createGain();
+                
+                lfo.connect(lfoGain);
+                lfoGain.connect(gain1.gain);
+                
+                osc1.connect(gain1);
+                osc2.connect(gain2);
+                gain1.connect(masterGain);
+                gain2.connect(masterGain);
+                masterGain.connect(audioContext.destination);
+                
+                osc1.type = 'square';
+                osc2.type = 'square';
+                osc1.frequency.setValueAtTime(baseFreq, now);
+                osc2.frequency.setValueAtTime(baseFreq, now);
+                
+                lfo.type = 'sine';
+                lfo.frequency.setValueAtTime(7, now);
+                lfoGain.gain.setValueAtTime(0.05, now);
+                
+                gain1.gain.setValueAtTime(0.1, now);
+                gain2.gain.setValueAtTime(0.1, now);
+                
+                masterGain.gain.setValueAtTime(0.15, now);
+                masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                
+                osc1.start(now);
+                osc2.start(now);
+                lfo.start(now);
+                osc1.stop(now + 0.5);
+                osc2.stop(now + 0.5);
+                lfo.stop(now + 0.5);
+                
+                activeNodes.push(osc1, osc2, lfo);
+                setTimeout(() => {
+                    cleanupNode(osc1);
+                    cleanupNode(osc2);
+                    cleanupNode(lfo);
+                }, 550);
+                
+            } else if (synthType === 2) {
+                // PLUCK: 物理モデリング風のプラック
+                const osc = audioContext.createOscillator();
+                const filter1 = audioContext.createBiquadFilter();
+                const filter2 = audioContext.createBiquadFilter();
+                const gain = audioContext.createGain();
+                
+                osc.connect(filter1);
+                filter1.connect(filter2);
+                filter2.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(baseFreq, now);
+                
+                filter1.type = 'lowpass';
+                filter1.frequency.setValueAtTime(6000, now);
+                filter1.frequency.exponentialRampToValueAtTime(300, now + 0.15);
+                filter1.Q.setValueAtTime(3, now);
+                
+                filter2.type = 'highpass';
+                filter2.frequency.setValueAtTime(100, now);
+                
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                
+                osc.start(now);
+                osc.stop(now + 0.2);
+                
+                activeNodes.push(osc);
+                setTimeout(() => cleanupNode(osc), 250);
+                
+            } else if (synthType === 3) {
+                // BELL: FM合成の複雑な倍音
+                const carrier = audioContext.createOscillator();
+                const modulator = audioContext.createOscillator();
+                const modGain = audioContext.createGain();
+                const gain = audioContext.createGain();
+                
+                modulator.connect(modGain);
+                modGain.connect(carrier.frequency);
+                carrier.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                carrier.type = 'sine';
+                modulator.type = 'sine';
+                carrier.frequency.setValueAtTime(baseFreq, now);
+                modulator.frequency.setValueAtTime(baseFreq * 3.14, now);
+                
+                modGain.gain.setValueAtTime(baseFreq * 2, now);
+                modGain.gain.exponentialRampToValueAtTime(0.1, now + 0.8);
+                
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.15, now + 0.003);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+                
+                carrier.start(now);
+                modulator.start(now);
+                carrier.stop(now + 1.0);
+                modulator.stop(now + 1.0);
+                
+                activeNodes.push(carrier, modulator);
+                setTimeout(() => {
+                    cleanupNode(carrier);
+                    cleanupNode(modulator);
+                }, 1050);
+            }
+        }
+
+        // サウンドセット選択に応じて適切な関数を呼び出す
+        function playDrumSound(part, time) {
+            if (app.currentSoundset === 0) {
+                playDrumSound_Standard(part, time);
+            } else if (app.currentSoundset === 1) {
+                playDrumSound_8Bit(part, time);
+            } else if (app.currentSoundset === 2) {
+                playDrumSound_Unique(part, time);
+            }
+        }
+
+        function playSynthSound(note, synthType) {
+            if (app.currentSoundset === 0) {
+                playSynthSound_Standard(note, synthType);
+            } else if (app.currentSoundset === 1) {
+                playSynthSound_8Bit(note, synthType);
+            } else if (app.currentSoundset === 2) {
+                playSynthSound_Unique(note, synthType);
+            }
         }
 
         async function connectBLE() {
             try {
-                log('BLE機器を検索中...');
-                
+                log('BLE接続開始...');
                 app.device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [CONSTANTS.MIDI_SERVICE_UUID] }]
+                    filters: [{ services: [CONSTANTS.SERVICE_UUID] }]
                 });
-                
-                log(`デバイス発見: ${app.device.name}`);
-                
-                // 切断イベントリスナー追加
-                app.device.addEventListener('gattserverdisconnected', handleDisconnect);
-                
+
                 const server = await app.device.gatt.connect();
-                const service = await server.getPrimaryService(CONSTANTS.MIDI_SERVICE_UUID);
-                app.characteristic = await service.getCharacteristic(CONSTANTS.MIDI_CHAR_UUID);
-                
+                const service = await server.getPrimaryService(CONSTANTS.SERVICE_UUID);
+                app.characteristic = await service.getCharacteristic(CONSTANTS.CHARACTERISTIC_UUID);
+
                 await app.characteristic.startNotifications();
-                app.characteristic.addEventListener('characteristicvaluechanged', handleMIDIData);
-                
+                app.characteristic.addEventListener('characteristicvaluechanged', onMIDI);
+
                 app.connected = true;
                 updateConnectionStatus();
                 document.getElementById('connectionModal').classList.remove('show');
-                log('接続完了!');
-                
+                log('✓ BLE接続成功');
             } catch (error) {
-                log(`エラー: ${error.message}`);
-                app.connected = false;
-                updateConnectionStatus();
+                log(`✗ BLE接続エラー: ${error}`);
+                alert('接続に失敗しました');
             }
         }
 
-        function handleDisconnect() {
-            app.connected = false;
-            app.characteristic = null;
-            updateConnectionStatus();
-            log('BLE接続が切断されました');
-            
-            // 再接続モーダルを表示
-            setTimeout(() => {
-                if (!app.connected) {
-                    document.getElementById('connectionModal').classList.add('show');
-                }
-            }, 1000);
+        function sendMIDI(status, data1, data2) {
+            if (!app.connected || !app.characteristic) return;
+
+            const packet = new Uint8Array(5);
+            packet[0] = 0x80;
+            packet[1] = 0x80;
+            packet[2] = status;
+            packet[3] = data1;
+            packet[4] = data2 || 0;
+
+            app.characteristic.writeValue(packet);
         }
 
-        async function sendMIDI(status, data1, data2 = null) {
-            if (!app.characteristic) return;
-            
-            const timestamp = (Date.now() & 0x7F) | 0x80;
-            const packet = [0x80, timestamp, status, data1];
-            if (data2 !== null) packet.push(data2);
-            
-            try {
-                await app.characteristic.writeValue(new Uint8Array(packet));
-            } catch (error) {
-                if (error.name === 'NetworkError') {
-                    log('BLE接続エラー: 再接続が必要です');
-                    app.connected = false;
-                    updateConnectionStatus();
-                } else {
-                    log(`送信エラー: ${error.message}`);
-                }
-            }
-        }
-
-        function handleMIDIData(event) {
-            const value = event.target.value;
-            const data = [];
-            for (let i = 0; i < value.byteLength; i++) {
-                data.push(value.getUint8(i));
-            }
-            
+        function onMIDI(event) {
+            const data = new Uint8Array(event.target.value.buffer);
             if (data.length < 3) return;
-            
-            const statusIndex = (data[0] & 0x80) ? 2 : 1;
-            if (statusIndex >= data.length) return;
-            
-            const status = data[statusIndex];
+
+            const status = data[2];
             const command = status & 0xF0;
-            
-            if (command === 0x90 && data.length > statusIndex + 2) {
-                const note = data[statusIndex + 1];
-                const velocity = data[statusIndex + 2];
-                handleNoteOn(note, velocity);
-            } else if (command === 0x80 && data.length > statusIndex + 1) {
-                const note = data[statusIndex + 1];
-                handleNoteOff(note);
-            } else if (command === 0xB0 && data.length > statusIndex + 2) {
-                const control = data[statusIndex + 1];
-                const value = data[statusIndex + 2];
-                handleControlChange(control, value);
-            }
-        }
+            const data1 = data[3];
+            const data2 = data.length > 4 ? data[4] : 0;
 
-        function handleNoteOn(note, velocity) {
-            if (note >= 16) return;
-            
-            const button = document.querySelectorAll('.round-key')[note];
-            if (button && app.currentMode >= 4) {
-                button.classList.add('active');
-                playSynthSound(note, app.currentMode - 4);
-                
-                if (app.recordingLayer >= 4 && app.currentMode >= 4) {
-                    if (!app.loopDuration) {
-                        app.loopDuration = (60000 / app.bpm / 4) * 16;
+            // Note On: シンセモードでハード側からの演奏
+            if (command === 0x90) {
+                const note = data1;
+                if (note < 16 && app.currentMode >= 4) {
+                    playSynthSound(note, app.currentMode - 4);
+                    
+                    // 録音モード中なら記録
+                    if (app.recordingLayer >= 0) {
+                        const timestamp = Date.now() - app.recordingStartTime;
+                        app.synthPatterns[app.recordingLayer].push({
+                            note: note,
+                            time: timestamp,
+                            played: false
+                        });
                     }
-                    const timestamp = Date.now() - app.recordingStartTime;
-                    app.synthPatterns[app.currentMode].push({
-                        note: note,
-                        timestamp: timestamp % app.loopDuration,
-                        played: false
-                    });
-                    log(`録音: Note ${note} at ${timestamp}ms`);
                 }
             }
-        }
+            // Note Off: シンセモードでのノートオフ処理
+            else if (command === 0x80) {
+                // Note Offは特に処理不要（音は自動的に減衰する）
+            }
+            // Control Change
+            else if (command === 0xB0) {
+                const control = data1;
+                const value = data2;
 
-        function handleNoteOff(note) {
-            if (note >= 16) return;
-            
-            const button = document.querySelectorAll('.round-key')[note];
-            if (button && app.currentMode >= 4) {
-                button.classList.remove('active');
-            }
-        }
-
-        function handleControlChange(control, value) {
-            if (control >= 16 && control < 32) {
-                const keyIndex = control - 16;
-                if (keyIndex < 16 && app.currentMode < 4) {
-                    app.rhythmPatterns[app.currentMode][keyIndex] = (value > 0);
-                    updateRoundKeys();
-                    log(`Pattern sync: Mode ${app.currentMode}, Key ${keyIndex} = ${value > 0}`);
-                }
-            } else if (control < 8) {
-                selectMode(control);
-            } 
-            // CC 0x42: ハードウェアからのリセット通知
-            else if (control === 0x42) {
-                // 全リズムパターンをクリア
-                for (let i = 0; i < 4; i++) {
-                    app.rhythmPatterns[i].fill(false);
-                }
-                
-                // 全シンセパターンをクリア
-                for (let i = 4; i < 8; i++) {
-                    app.synthPatterns[i] = [];
-                }
-                
-                // シーケンサーが再生中なら停止
-                if (app.isPlaying) {
-                    stopSequencer();
-                    document.getElementById('playBtn').classList.remove('active');
-                    app.isPlaying = false;
-                }
-                
-                // モードをKICK(0)に戻す
-                selectMode(0);
-                
-                // UI更新
-                updateRoundKeys();
-                
-                log('Full reset: All patterns cleared, sequencer stopped, BPM preserved');
-            }
-            // CC 0x53: ハードウェアからの録音モード開始通知
-            else if (control === 0x53) {
-                const targetMode = value;
-                if (targetMode >= 4 && targetMode <= 7) {
-                    // モード切替
-                    selectMode(targetMode);
+                // CC_BAR_SYNC: ステップインジケーター更新 + 全パートの音を鳴らす
+                if (control === CONSTANTS.CC_BAR_SYNC) {
+                    const step = value;
                     
-                    // 録音開始
-                    app.recordingLayer = targetMode;
-                    app.recordingStartTime = Date.now();
-                    app.synthPatterns[targetMode] = [];
-                    
-                    if (!app.loopDuration) {
-                        app.loopDuration = (60000 / app.bpm / 4) * 16;
-                    }
-                    
-                    // UI更新
-                    const squareKeys = document.querySelectorAll('.square-key');
-                    squareKeys[targetMode].classList.add('recording');
-                    
-                    log(`Hardware long press: Recording started on ${CONSTANTS.MODE_NAMES[targetMode]}`);
-                }
-            }
-            // CC 0x54: ハードウェアからのステップ同期
-            else if (control === 0x54) {
-                // 実機からのステップ位置でインジケータを同期
-                const step = value;
-                if (step < 16) {
-                    app.currentStep = step;
-                    
-                    // UI更新(インジケータのみ)
+                    // インジケーター更新
                     document.querySelectorAll('.round-key').forEach(btn => {
                         btn.classList.remove('indicator');
                     });
                     document.querySelectorAll('.round-key')[step]?.classList.add('indicator');
+                    
+                    // ステップ0でループをリセット（より正確なタイミング）
+                    if (step === 0) {
+                        app.loopStartTime = Date.now();
+                        app.isPlaying = true;
+                        
+                        // 全シンセパートのノートのplayedフラグをリセット
+                        for (let layer = 4; layer < 8; layer++) {
+                            if (app.synthPatterns[layer]) {
+                                app.synthPatterns[layer].forEach(note => {
+                                    note.played = false;
+                                });
+                            }
+                        }
+                    }
+                    
+                    // 全ドラムパート（0-3）をチェックして音を鳴らす
+                    if (step < 16) {
+                        for (let part = 0; part < 4; part++) {
+                            if (app.rhythmPatterns[part][step]) {
+                                playDrumSound(part, audioContext.currentTime);
+                            }
+                        }
+                    }
+                    
+                    // ルーパー再生: 全シンセパートの音を再生（マルチトラック）
+                    // ただしソレノイドは現在選択中のモードのパートのみ駆動
+                    if (app.isPlaying && app.loopDuration > 0) {
+                        const currentLoopTime = Date.now() - app.loopStartTime;
+                        const loopPosition = currentLoopTime % app.loopDuration;
+                        const stepDuration = app.loopDuration / 16;
+                        const currentStepStart = step * stepDuration;
+                        const currentStepEnd = (step + 1) * stepDuration;
+                        
+                        // 全シンセパート（4-7）の録音をチェックして同時再生
+                        for (let layer = 4; layer < 8; layer++) {
+                            const pattern = app.synthPatterns[layer];
+                            if (pattern && pattern.length > 0) {
+                                pattern.forEach(note => {
+                                    // 現在のステップ範囲内のノートを再生
+                                    if (note.time >= currentStepStart && note.time < currentStepEnd && !note.played) {
+                                        // ★ 音は全パート再生
+                                        playSynthSound(note.note, layer - 4);
+                                        
+                                        // ★ ソレノイドは現在選択中のモードのパートのみ駆動
+                                        if (layer === app.currentMode) {
+                                            sendMIDI(0x90, note.note, 127);
+                                            log(`Looper: Note On [${CONSTANTS.MODE_NAMES[layer]}] key ${note.note + 1}`);
+                                            
+                                            // 50ms後にNote Offを送信（統一）
+                                            setTimeout(() => {
+                                                sendMIDI(0x80, note.note, 0);
+                                            }, CONSTANTS.SOLENOID_DURATION);
+                                        }
+                                        
+                                        note.played = true;
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+                // CC_RECORDING_MODE: ルーパー機能の録音開始/終了
+                else if (control === CONSTANTS.CC_RECORDING_MODE) {
+                    const mode = value;
+                    if (mode > 0) {
+                        // 録音開始
+                        app.recordingLayer = mode;
+                        app.recordingStartTime = Date.now();
+                        app.synthPatterns[mode] = [];
+                        
+                        // ループ時間を設定（16ステップ分）
+                        app.loopDuration = (60000 / app.bpm / 4) * 16;
+                        
+                        // UIを更新
+                        document.querySelectorAll('.square-key')[mode]?.classList.add('recording');
+                        log(`録音開始: ${CONSTANTS.MODE_NAMES[mode]} (ループ: ${app.loopDuration}ms)`);
+                    } else {
+                        // 録音終了
+                        if (app.recordingLayer >= 0) {
+                            document.querySelectorAll('.square-key')[app.recordingLayer]?.classList.remove('recording');
+                            log(`録音終了: ${CONSTANTS.MODE_NAMES[app.recordingLayer]} (${app.synthPatterns[app.recordingLayer].length}ノート記録)`);
+                            app.recordingLayer = -1;
+                        }
+                    }
+                }
+                // モード切替
+                else if (control < 8) {
+                    selectMode(control);
+                }
+                // BPM変更
+                else if (control === 0x41) {
+                    app.bpm = 60 + value;
+                    document.getElementById('bpmSlider').value = app.bpm;
+                    document.getElementById('bpmDisplay').textContent = app.bpm;
+                }
+                // パターンリセット
+                else if (control === 0x42) {
+                    resetAllPatterns();
+                }
+                // パターントグル
+                else if (control >= 16 && control < 32) {
+                    const keyIndex = control - 16;
+                    if (keyIndex < 16 && app.currentMode < 4) {
+                        app.rhythmPatterns[app.currentMode][keyIndex] = (value > 0);
+                        updateRoundKeys();
+                    }
                 }
             }
         }
 
         function selectMode(mode) {
             app.currentMode = mode;
-            
             document.querySelectorAll('.square-key').forEach((btn, i) => {
                 btn.classList.toggle('selected', i === mode);
             });
-            
             updateRoundKeys();
             log(`Mode: ${CONSTANTS.MODE_NAMES[mode]}`);
         }
 
         function updateRoundKeys() {
-            const buttons = document.querySelectorAll('.round-key');
-            
-            if (app.currentMode < 4) {
-                const pattern = app.rhythmPatterns[app.currentMode];
-                buttons.forEach((btn, i) => {
-                    btn.classList.toggle('active', pattern[i]);
-                });
-            } else {
-                buttons.forEach(btn => btn.classList.remove('active'));
-            }
+            document.querySelectorAll('.round-key').forEach((btn, i) => {
+                if (app.currentMode < 4) {
+                    btn.classList.toggle('active', app.rhythmPatterns[app.currentMode][i]);
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
         }
 
         function resetAllPatterns() {
-            for (let i = 0; i < 4; i++) {
-                app.rhythmPatterns[i].fill(false);
-            }
-            
-            for (let i = 4; i < 8; i++) {
-                app.synthPatterns[i] = [];
-            }
-            
+            app.rhythmPatterns = app.rhythmPatterns.map(() => Array(16).fill(false));
+            app.synthPatterns = Array(8).fill(null).map(() => []);
             updateRoundKeys();
-            sendMIDI(0xB0, 0x42, 127);
-            log('All patterns reset');
-        }
-
-        // 正確なシーケンサー実装
-        function scheduleStep() {
-            if (!audioContext) initAudio();
             
-            const stepDuration = 60 / app.bpm / 4;
-            
-            while (app.nextStepTime < audioContext.currentTime + CONSTANTS.SCHEDULE_AHEAD_TIME) {
-                playStepAtTime(app.currentStep, app.nextStepTime);
+            // ハード側にもリセット指示を送信
+            if (app.connected) {
+                // まずCC 0x42でハード側の内部状態をクリア
+                sendMIDI(0xB0, 0x42, 127);
+                log('Reset command sent to hardware (CC 0x42)');
                 
-                app.nextStepTime += stepDuration;
-                app.currentStep = (app.currentStep + 1) % 16;
-            }
-            
-            if (app.isPlaying) {
-                app.animationFrameId = requestAnimationFrame(scheduleStep);
-            }
-        }
-
-        function playStepAtTime(step, time) {
-            // ドラムパターン再生
-            for (let layer = 0; layer < 4; layer++) {
-                if (app.rhythmPatterns[layer][step]) {
-                    setTimeout(() => {
-                        playDrumSound(layer);
-                        // MIDIは送信しない(実機側が再生をコントロール)
-                        // sendMIDI(0x90, step, 127);
-                        // setTimeout(() => sendMIDI(0x80, step, 0), CONSTANTS.MIDI_NOTE_DURATION);
-                    }, (time - audioContext.currentTime) * 1000);
-                }
-            }
-            
-            // シンセパターン再生
-            const stepDuration = 60 / app.bpm / 4;
-            const currentTime = (step / 16) * app.loopDuration;
-            
-            for (let layer = 4; layer < 8; layer++) {
-                app.synthPatterns[layer].forEach(note => {
-                    const timeDiff = Math.abs(note.timestamp - currentTime);
-                    if (timeDiff < (stepDuration * 1000 * CONSTANTS.NOTE_TRIGGER_THRESHOLD) && !note.played) {
-                        setTimeout(() => {
-                            playSynthSound(note.note, layer - 4);
-                            sendMIDI(0x90, note.note, 127);
-                            setTimeout(() => sendMIDI(0x80, note.note, 0), 100);
-                        }, (time - audioContext.currentTime) * 1000);
-                        
-                        note.played = true;
-                        setTimeout(() => { note.played = false; }, stepDuration * 1000);
+                // 各ドラムパート（0-3）の全ステップを明示的にOFFに
+                const clearPart = (part) => {
+                    if (part >= 4) {
+                        // 全パート完了後、元のモードに戻す
+                        sendMIDI(0xB0, app.currentMode, 127);
+                        log('Hardware patterns cleared');
+                        return;
                     }
-                });
+                    
+                    // パートを切り替え
+                    sendMIDI(0xB0, part, 127);
+                    
+                    // 少し待機してから全ステップをOFFに
+                    setTimeout(() => {
+                        for (let step = 0; step < 16; step++) {
+                            sendMIDI(0xB0, 16 + step, 0);
+                        }
+                        
+                        // 次のパートへ
+                        setTimeout(() => clearPart(part + 1), 50);
+                    }, 50);
+                };
+                
+                // 100ms後に開始
+                setTimeout(() => clearPart(0), 100);
             }
             
-            // UI更新(メインスレッドで)
-            setTimeout(() => {
-                document.querySelectorAll('.round-key').forEach(btn => {
-                    btn.classList.remove('indicator');
-                });
-                document.querySelectorAll('.round-key')[step]?.classList.add('indicator');
-            }, (time - audioContext.currentTime) * 1000);
-        }
-
-        function startSequencer() {
-            if (!audioContext) initAudio();
-            
-            if (app.animationFrameId) {
-                cancelAnimationFrame(app.animationFrameId);
-            }
-            
-            const stepDuration = 60 / app.bpm / 4;
-            app.loopDuration = stepDuration * 16 * 1000;
-            app.nextStepTime = audioContext.currentTime;
-            app.currentStep = 0;
-            
-            scheduleStep();
-        }
-
-        function stopSequencer() {
-            app.isPlaying = false;
-            
-            if (app.animationFrameId) {
-                cancelAnimationFrame(app.animationFrameId);
-                app.animationFrameId = null;
-            }
-            
-            document.querySelectorAll('.round-key').forEach(btn => {
-                btn.classList.remove('indicator');
-            });
+            log('All patterns reset (hardware & app)');
         }
 
         function initUI() {
@@ -966,59 +1547,33 @@
                 
                 if (i === 0) button.classList.add('selected');
                 
-                let longPressTimer;
-                
+                // ボタンを押した瞬間にモード切り替え
                 const handlePointerDown = () => {
-                    longPressTimer = setTimeout(() => {
-                        if (i >= 4) {
-                            button.classList.add('recording');
-                            app.recordingLayer = i;
-                            app.recordingStartTime = Date.now();
-                            app.synthPatterns[i] = [];
-                            
-                            if (!app.loopDuration) {
-                                app.loopDuration = (60000 / app.bpm / 4) * 16;
-                            }
-                            
-                            log(`録音開始: ${name}`);
-                        }
-                    }, CONSTANTS.LONG_PRESS_DURATION);
-                };
-                
-                const handlePointerEnd = () => {
-                    clearTimeout(longPressTimer);
-                    
-                    if (button.classList.contains('recording')) {
-                        button.classList.remove('recording');
-                        app.recordingLayer = -1;
-                        log(`録音終了: ${name}`);
-                    } else {
-                        selectMode(i);
-                        sendMIDI(0xB0, i, 127);
-                    }
+                    selectMode(i);
+                    sendMIDI(0xB0, i, 127);
                 };
                 
                 button.addEventListener('pointerdown', handlePointerDown);
-                button.addEventListener('pointerup', handlePointerEnd);
-                button.addEventListener('pointercancel', handlePointerEnd);
-                button.addEventListener('pointerleave', handlePointerEnd);
                 
                 squareKeysContainer.appendChild(button);
             });
             
             // Transport controls
             document.getElementById('playBtn').addEventListener('click', () => {
-                app.isPlaying = true;
                 document.getElementById('playBtn').classList.add('active');
                 sendMIDI(0xB0, 0x40, 127);
-                startSequencer();
                 log('Play');
             });
             
             document.getElementById('stopBtn').addEventListener('click', () => {
                 document.getElementById('playBtn').classList.remove('active');
                 sendMIDI(0xB0, 0x40, 0);
-                stopSequencer();
+                
+                // インジケーターをクリア
+                document.querySelectorAll('.round-key').forEach(btn => {
+                    btn.classList.remove('indicator');
+                });
+                
                 log('Stop');
             });
             
@@ -1031,7 +1586,6 @@
                 app.bpm = parseInt(bpmSlider.value);
                 bpmDisplay.textContent = app.bpm;
                 sendMIDI(0xB0, 0x41, app.bpm - 60);
-                if (app.isPlaying) startSequencer();
             });
             
             document.getElementById('tapBtn').addEventListener('click', () => {
@@ -1058,13 +1612,19 @@
                         bpmSlider.value = bpm;
                         bpmDisplay.textContent = bpm;
                         sendMIDI(0xB0, 0x41, bpm - 60);
-                        if (app.isPlaying) startSequencer();
                     }
                 }
             });
             
             document.getElementById('debugBtn').addEventListener('click', () => {
                 document.getElementById('debugLog').classList.toggle('visible');
+            });
+            
+            // サウンドセット切り替え
+            document.getElementById('soundsetSelector').addEventListener('change', (e) => {
+                app.currentSoundset = parseInt(e.target.value);
+                const soundsetNames = ['STANDARD', '8BIT', 'UNIQUE'];
+                log(`サウンドセット変更: ${soundsetNames[app.currentSoundset]}`);
             });
             
             document.getElementById('connectBtn').addEventListener('click', connectBLE);
@@ -1086,8 +1646,6 @@
 
         // クリーンアップ処理
         window.addEventListener('beforeunload', () => {
-            stopSequencer();
-            
             if (audioContext) {
                 activeNodes.forEach(node => cleanupNode(node));
                 audioContext.close();
